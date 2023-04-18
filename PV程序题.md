@@ -1,20 +1,117 @@
 # 练习
 
+## 注意：所有的互斥信号量的使用都是配对的!!!有wait操作就必然有signal操作!!!
+
+类型定义 用 **semaphore** 就行
+
+## 经典的消费者生产者问题
+
+```c++
+int full=0;
+int empty=n;
+int mutex=1;
+Cobegin
+Producer();Consumer();
+Coend
+Producer(){
+    while(true){
+        生产者生产物品
+        wait(empty)
+        wait(mutex)
+        放入物品
+        signal(mutex)
+       	signal(full)
+    }
+}
+Consumer(){
+    while(true){
+       	wait(full)
+        wait(mutex)
+        消费物品
+        signal(mutex)
+        signal(empty)
+    }
+}
+```
+
+## 读者写者问题
+
+允许多个进程同时读取一个共享对象；但是不允许一个写进程和其他读进程或者写进程同时访问一个共享对象
+
+即保证 write 进程与其他进程互斥访问共享对象
+
+```c++
+semaphore rmutex=1,wmutex=1;
+//这个rmutex是给 readcount 临界资源设置的互斥信号量，同时只能有一个读进程去操作
+int readcount=0;
+Cobegin
+reader();writer();
+Coend
+reader(){
+    while(true){
+        //可能有写进程
+        if(readcount==0)
+            wait(wmutex);
+        
+        //准备开始读，修改readcount
+        wait(rmutex);
+        readcount++;
+        signal(rmutex);
+        
+       	读操作;
+        
+       	//读完了，修改readcount
+        wait(rmutex);
+        readcount--;
+        signal(rmutex);
+        
+        //当读进程为0，写进程可以进入
+        if(readcount==0)
+           signal(wmutex);
+    }
+}
+writer(){
+    while(true){
+        wait(wmutex);
+        写;
+        signal(wmutex);
+    }
+}
+```
+
+## 哲学家进餐问题
+
+```c++
+semaphore chopsticks[5]={1,1,1,1,1};//定义每根筷子的互斥信号量
+Cobegin
+Eat();
+Coend
+Eat(){
+    while(true){
+        wait(chopsticks[i]);
+        wait(chopstick[(i+1)%5]);
+        吃;
+      	signal(chopstick[(i+1)%5]);
+       	signal(chopsticks[i]);
+    }
+}
+```
+
 ## 1、
 
 n个并发进程共用一个公共变量Q，写出用信号灯的PV操作实现n个进程互斥的程序描述。
 
-```cpp
-int mutex=1;//互斥访问
+```c++
+int mutex=1;//互斥
 Cobegin
-P1();P2()……Pn();
+P1();P2();...;Pn();
 Coend
-Pi{
-	while(1){
-	p(mutex);
-	访问公共变量Q;
-	v(mutex);
-	}
+Pi(){
+    while(true){
+        wait(mutex)
+        访问Q
+        signal(mutex)
+    }
 }
 ```
 
@@ -22,7 +119,7 @@ Pi{
 
 如图1所示的进程流程图中，有8个进程合作完成某一任务，试说明这八个进程之间的同步关系，用PV操作实现之，并要求写出程序描述。
 
-![在这里插入图片描述](D:\Typora\Images\39777e147deb4b6880d333ee259d0131.png)
+<img src="D:\Typora\Images\39777e147deb4b6880d333ee259d0131.png" alt="在这里插入图片描述" style="zoom:67%;" />
 
 ```cpp
 int s2=s3=s4=s35=s36=s37=s45=s46=s47=s28=s58=s68=0;
@@ -101,47 +198,47 @@ P8(){
 
 ![图2](D:\Typora\Images\196661c3854d4f6ea96619eec1af9ac8.png)
 
-```cpp
-int fulls=0;
-int emptys=1;
-int fullt=0;
-int emptyt=1;
-int mutex1=1;
-int mutex2=1;
+```c++
+int fullS=0;
+int emptyS=1;
+int fullT=0;
+int emptyT=1;
+semaphore mutexS=1;
+semaphore mutexT=1;
 Cobegin
 get();copy();put();
 Coend
 get(){
-	while(1){
-		P(emptys);
-		P(mutex1);
-		放入缓冲区s;
-		V(mutex1);
-		V(fulls);
-	}
+    while(true){
+        wait(emptyS);
+        wait(mutexS);
+        放入缓冲区s;
+        signal(mutexS);
+        signal(fullS);
+    }
 }
 copy(){
-	while(1){
-		P(fulls);
-		P(mutex1);
-		从s中取出记录;
-		V(mutex1);
-		V(emptys);
-		P(emptyt);
-		P(mutex2);
-		复制到t;
-		V(mutex2);
-		V(fullt);
-	}
+    while(true){
+        wait(fullS);
+        wait(mutexS);
+        从s中取出记录;
+        signal(mutexS);
+        signal(emptyS);
+        wait(emptyT);
+        wait(mutexT);
+        放入缓冲区t;
+        signal(mutexT);
+        signal(fullT);
+    }
 }
-get(){
-	while(1){
-		P(fullt);
-		P(mutex2);
-		从t中取出;
-		V(mutex2);
-		V(emptyt);
-	}
+put(){
+    while(true){
+        wait(fullT);
+        wait(mutexT);
+        拿出数据打印;
+        signal(mutexT);
+        signal(emptyT);
+    }
 }
 ```
 
@@ -149,24 +246,26 @@ get(){
 
 有一个阅览室，读者进入阅览室必须先在一张登记表TB上登记，该表为每一个座位设一个表目，读者离开时要消掉其登记信息，阅览室共有100个座位。请用PV操作写出进程间的同步算法。
 
-```cpp
-int count=100;//对座位互斥
-int mutex=1;//对登记表互斥
-
-读者(){
-	while(1){
-		进入阅览室;
-		P(count);
-		P(mutex);
-		登记;
-		V(mutex);
-		坐下看书;
-		P(mutex);
-		撤销登记;
-		V(mutex);
-		V(count);
-		离开;
-	}
+```c++
+int count=100;//座位数量
+semaphore mutex=1;//登记表使用互斥
+Cobegin
+read();
+Coend
+read(){
+    while(true){
+        进入阅览室;
+        wait(count);
+        wait(mutex);
+        登记;
+        signal(mutex);
+        读书;
+        wait(mutex);
+        撤销登记;
+        signal(mutex);
+        signal(count);
+        离开;
+    }
 }
 ```
 
@@ -175,29 +274,32 @@ int mutex=1;//对登记表互斥
 设公共汽车上，司机和售票员的活动分别是：
 
 司机的活动：启动车辆、正常行车、到站停车
-售票员的活动：关车门、售票、开车门
+售票员的活动：开车门、售票、关车门
 在汽车不断到站、停站、行驶过程中，这两个活动有什么同步关系？请用信号量的PV操作实现。
 
-```cpp
+```c++
 int s1=0;//是否到站
 int s2=0;//是否可以离站
-司机(){
-	while(1){
-	正常行驶;
-	到站、停车;
-	V(S1);
-	P(S2);
-	离站;
-	}
+Cobegin
+driver();seller();
+Coend
+driver(){
+    while(true){
+        wait(s2);
+        启动车辆;
+        正常行车;
+        到站停车;
+        signal(s1);
+    }
 }
-司机(){
-	while(1){
-	P(S1);
-	开车门;
-	售票;
-	关车门;
-	V(S2);
-	}
+seller(){
+    while(true){
+        wait(s1);
+        开车门;
+        售票;
+        关车门;
+        signal(s2);
+    }
 }
 ```
 
@@ -259,3 +361,160 @@ Coend
 	}
 }
 ```
+
+## 8、
+
+![image-20230418190835692](D:\Typora\Images\image-20230418190835692.png)
+
+```c++
+int capacity=500;//能容纳的最大人数
+int mutex=1;//出入口互斥锁
+Cobegin
+Visit();
+Coend
+Visit(){
+    while(true){
+        wait(capacity);
+        wait(mutex);
+        进门
+        signal(mutex);
+        参观;
+        wait(mutex);
+        出门;
+        signal(mutex);
+        signal(capacity);
+    }
+}
+```
+
+## 9、
+
+![image-20230418191212388](D:\Typora\Images\image-20230418191212388.png)
+
+```c++
+int A1=x;//A信箱装的邮件数量
+int A2=M-x;//A信箱还可以装的邮件数量
+int B1=y;//B邮箱装的邮件数量
+int B2=N-y;//B邮箱还以装的邮件数量
+int mutexA=1;
+int mutexB=1;//访问互斥锁
+Cobegin
+A();B();
+Coend
+A(){
+    while(true){
+        wait(A1);
+        wait(mutexA);
+        从A的信箱中取出一个信件;
+        signal(mutexA);
+        signal(A2);
+        回答问题并提出一个新问题;
+        wait(B2);
+        wait(mutexB);
+        将新邮件装入B邮箱;
+        signal(mutexB);
+        signal(B1);
+    }
+}
+B(){
+	while(true){
+        wait(B1);
+        wait(mutexB);
+        从B的信箱中取出一个信件;
+        signal(mutexB);
+        signal(B2);
+        回答问题并提出一个新问题;
+        wait(A2);
+        wait(mutexA);
+        将新邮件装入A邮箱;
+        signal(mutexA);
+        signal(A1);
+    }
+}
+```
+
+## 10、
+
+三个进程 P1、P2、P3 互斥使用一个包含 N（N>0）个单元的缓冲区。P1 每次用 produce() 生成一个正整数并用put()送入缓冲区某一个空单元中；P2 每次用 getodd()从该缓冲区中取出一个奇数并用 countodd()统计奇数个数；P3 每次用 geteven()从该缓冲区中取出一个偶数并用 counteven()统计偶数个数。请用信号量机制实现这三个进程的同步与互斥活动， 并说明所定义的信号量的含义。
+
+```c++
+semaphore mutex=1;//缓冲区使用互斥锁
+int empty=N;//缓冲区空闲的个数
+int odd=0;//奇数区个数
+int even=0;//偶数区个数
+Cobegin
+P1();P2();P3()
+Coend
+P1(){
+    while(true){
+        wait(empty);
+        wait(mutex);
+        produce();
+        put();
+        signal(mutex);
+        if(num&1)//奇数
+            signal(odd);
+       	else
+            signal(even);
+    }
+}
+P2(){
+    while(true){
+        wait(odd);
+        wait(mutex);
+        getodd();
+        countodd()++;
+        signal(mutex);
+        signal(empty);
+    }
+}
+P3(){
+    while(true){
+	    wait(even);
+       	wait(mutex);
+        geteven();
+        counteven()++;
+        signal(mutex);
+        signal(empty);
+    }
+}
+```
+
+## 11、
+
+一个野人部落从一个大锅中一起吃炖肉，这个大锅一次可以存放 M 人份的炖肉。当野人们想吃的时候，如果锅中不空，他们就自助着从大锅中吃肉。如果大锅空了，他们就叫 醒厨师，等待厨师再做一锅肉。 野人线程未同步的代码如下： while (true){ getServingFromPot() } 厨师线程未同步的代码如下： while (true) { putServingsInPot(M) } 同步的要求是： 当大锅空的时候，野人不能够调用 getServingFromPot() 仅当大锅为空的时候，大厨才能够调用 putServingsInPot() 问题：请写出使用 PV 满足同步要求的完整程序。
+
+野人互斥着吃，厨师互斥着做
+
+```c++
+semaphore mutex=1;//使用锅的互斥信号量
+semaphore full=0;//锅满了
+semaphore empty=0;//锅空了
+static int servings=0;//肉的数量
+Cobegin
+cook();eat();
+Coend
+cook(){
+    while(true){
+        wait(empty);
+        wait(mutex);
+        putServingsInPot(M);
+        servings += M;
+        signal(mutex);
+        signal(full);
+    }
+}
+//这是一个野人的线程
+eat(){
+    while(true){
+        wait(full);
+        wait(mutex);
+        getServingFromPot();
+        servings -= 1;
+        signal(mutex);
+        if(servings == 0)
+            signal(empty);
+    }
+}
+```
+
